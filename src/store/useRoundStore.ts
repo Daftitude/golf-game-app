@@ -3,20 +3,20 @@
 import { create } from "zustand";
 
 import {
+  adjustBasicScore as engineAdjustBasicScore,
+  applyShotOutcome as engineApplyShotOutcome,
   createRound,
-  dropBall as engineDropBall,
+  finishCurrentHole as engineFinishCurrentHole,
   goToNextHole,
   goToPreviousHole,
-  markBallUnplayable as engineMarkBallUnplayable,
-  recordShot as engineRecordShot,
 } from "../game/engine";
 
 import type {
+  ApplyShotOutcomeInput,
+  BasicScoreAdjustmentInput,
   Course,
-  DropBallInput,
-  MarkBallUnplayableInput,
+  GameModeId,
   Player,
-  RecordShotInput,
   RoundSettings,
   RoundState,
 } from "../game/types";
@@ -24,22 +24,23 @@ import type {
 type RoundStore = {
   round: RoundState | null;
   error: string | null;
+  scorecardOpen: boolean;
 
   startRound: (
     course: Course,
     players: Player[],
     teeBox: string,
+    gameMode: GameModeId,
     settings?: Partial<RoundSettings>,
   ) => void;
 
-  recordShot: (input: RecordShotInput) => void;
-  markBallUnplayable: (input: MarkBallUnplayableInput) => void;
-  dropBall: (input: DropBallInput) => void;
-
+  applyShotOutcome: (input: ApplyShotOutcomeInput) => void;
+  adjustBasicScore: (input: BasicScoreAdjustmentInput) => void;
+  finishCurrentHole: () => void;
   nextHole: () => void;
   previousHole: () => void;
-
-  resetRound: () => void;
+  toggleScorecard: () => void;
+  endRound: () => void;
   clearError: () => void;
 };
 
@@ -50,11 +51,27 @@ function getErrorMessage(error: unknown): string {
 export const useRoundStore = create<RoundStore>((set, get) => ({
   round: null,
   error: null,
+  scorecardOpen: false,
 
-  startRound: (course, players, teeBox, settings) => {
+  startRound: (course, players, teeBox, gameMode, settings) => {
     try {
       set({
-        round: createRound({ course, players, teeBox, settings }),
+        round: createRound({ course, players, teeBox, gameMode, settings }),
+        error: null,
+        scorecardOpen: false,
+      });
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    }
+  },
+
+  applyShotOutcome: (input) => {
+    const round = get().round;
+    if (!round) return set({ error: "Start a round first." });
+
+    try {
+      set({
+        round: engineApplyShotOutcome(round, input),
         error: null,
       });
     } catch (error) {
@@ -62,34 +79,29 @@ export const useRoundStore = create<RoundStore>((set, get) => ({
     }
   },
 
-  recordShot: (input) => {
+  adjustBasicScore: (input) => {
     const round = get().round;
     if (!round) return set({ error: "Start a round first." });
 
     try {
-      set({ round: engineRecordShot(round, input), error: null });
+      set({
+        round: engineAdjustBasicScore(round, input),
+        error: null,
+      });
     } catch (error) {
       set({ error: getErrorMessage(error) });
     }
   },
 
-  markBallUnplayable: (input) => {
+  finishCurrentHole: () => {
     const round = get().round;
     if (!round) return set({ error: "Start a round first." });
 
     try {
-      set({ round: engineMarkBallUnplayable(round, input), error: null });
-    } catch (error) {
-      set({ error: getErrorMessage(error) });
-    }
-  },
-
-  dropBall: (input) => {
-    const round = get().round;
-    if (!round) return set({ error: "Start a round first." });
-
-    try {
-      set({ round: engineDropBall(round, input), error: null });
+      set({
+        round: engineFinishCurrentHole(round),
+        error: null,
+      });
     } catch (error) {
       set({ error: getErrorMessage(error) });
     }
@@ -97,14 +109,35 @@ export const useRoundStore = create<RoundStore>((set, get) => ({
 
   nextHole: () => {
     const round = get().round;
-    if (round) set({ round: goToNextHole(round), error: null });
+    if (!round) return;
+
+    set({
+      round: goToNextHole(round),
+      error: null,
+    });
   },
 
   previousHole: () => {
     const round = get().round;
-    if (round) set({ round: goToPreviousHole(round), error: null });
+    if (!round) return;
+
+    set({
+      round: goToPreviousHole(round),
+      error: null,
+    });
   },
 
-  resetRound: () => set({ round: null, error: null }),
+  toggleScorecard: () => {
+    set({ scorecardOpen: !get().scorecardOpen });
+  },
+
+  endRound: () => {
+    set({
+      round: null,
+      error: null,
+      scorecardOpen: false,
+    });
+  },
+
   clearError: () => set({ error: null }),
 }));

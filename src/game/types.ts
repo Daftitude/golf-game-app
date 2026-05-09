@@ -1,11 +1,8 @@
 // src/game/types.ts
 
-// ---------------------------------------------------------
+// =========================================================
 // COURSE BUILDER TYPES
-// These define our standardized internal course format.
-// Later, OCR, imports, GPS, and Supabase should all convert
-// into this same shape.
-// ---------------------------------------------------------
+// =========================================================
 
 export type HoleShape =
   | "straight"
@@ -66,10 +63,9 @@ export type Course = {
   updatedAt: string;
 };
 
-// ---------------------------------------------------------
+// =========================================================
 // PLAYER + CLUB TYPES
-// Club recommendations come from each player's own distances.
-// ---------------------------------------------------------
+// =========================================================
 
 export type ClubType =
   | "driver"
@@ -80,13 +76,22 @@ export type ClubType =
   | "putter"
   | "other";
 
+export type ClubMissTendency =
+  | "left"
+  | "right"
+  | "short"
+  | "long"
+  | "balanced";
+
 export type Club = {
   id: string;
   name: string;
   type: ClubType;
   averageDistanceYards: number;
-  minDistanceYards?: number;
-  maxDistanceYards?: number;
+  minDistanceYards: number;
+  maxDistanceYards: number;
+  accuracyRating: number; // 1-100
+  missTendency: ClubMissTendency;
   notes?: string;
 };
 
@@ -97,17 +102,56 @@ export type Player = {
   clubProfile: Club[];
 };
 
-// ---------------------------------------------------------
-// GAME + ROUND TYPES
-// These are intentionally flexible enough for standard golf,
-// 3-ball golf, and later custom modes.
-// ---------------------------------------------------------
+// =========================================================
+// GAME MODE TYPES
+// =========================================================
 
-export type GameModeId = "standard" | "three-ball" | "custom";
+export type GameModeId =
+  | "basic"
+  | "three-ball-drop"
+  | "one-ball-drop"
+  | "serious";
+
+export type GameModeDefinition = {
+  id: GameModeId;
+  title: string;
+  shortName: string;
+  description: string;
+  rules: string[];
+};
 
 export type BallsPerPlayer = 1 | 2 | 3;
-
 export type BallNumber = 1 | 2 | 3;
+
+export type RoundSettings = {
+  gameMode: GameModeId;
+  ballsPerPlayer: BallsPerPlayer;
+  dropPenaltyStrokes: number;
+  singleBallStartingDrops: number;
+  allowDropNearOtherPlayersBall: boolean;
+  allowRandomDrop: boolean;
+  strictMode: boolean;
+  shotTrackingEnabled: boolean;
+  basicScoringOnly: boolean;
+};
+
+// =========================================================
+// BALL AVATAR TYPES
+// =========================================================
+
+export type BallMarkerStyle = "circle" | "square" | "diamond";
+
+export type BallAvatar = {
+  color: string;
+  numberLabel: string;
+  name: string;
+  emoji: string;
+  markerStyle: BallMarkerStyle;
+};
+
+// =========================================================
+// SHOT OUTCOME TYPES
+// =========================================================
 
 export type LieStatus =
   | "tee"
@@ -121,37 +165,74 @@ export type LieStatus =
   | "drop-zone"
   | "holed";
 
-export type PlayableState = "playable" | "unplayable" | "lost" | "holed";
+export type PlayableState =
+  | "playable"
+  | "unplayable"
+  | "out-of-play"
+  | "lost"
+  | "holed";
+
+export type ShotQuality =
+  | "good"
+  | "short"
+  | "topped"
+  | "out-of-play"
+  | "drop";
+
+export type ShotDirection = "center" | "left" | "right";
+
+export type ShotOutcomeType =
+  | "good-center"
+  | "good-left"
+  | "good-right"
+  | "short-center"
+  | "short-left"
+  | "short-right"
+  | "topped-center"
+  | "topped-left"
+  | "topped-right"
+  | "out-left"
+  | "out-right"
+  | "drop-average"
+  | "random-drop";
+
+export type BallMapPosition = {
+  distanceFromTeeYards: number;
+  lateralOffsetYards: number;
+};
 
 export type BallEventType = "stroke" | "drop" | "penalty";
 
 export type BallEvent = {
   id: string;
   type: BallEventType;
-
-  // Event number counts everything that happened to this ball.
   eventNumber: number;
-
-  // Stroke number only exists for actual golf swings.
   strokeNumber?: number;
-
+  outcomeType?: ShotOutcomeType;
+  shotQuality?: ShotQuality;
+  shotDirection?: ShotDirection;
   clubId?: string;
-  distanceYards: number;
-
+  clubName?: string;
+  shotDistanceYards: number;
+  distanceFromTeeBeforeYards: number;
+  distanceFromTeeAfterYards: number;
+  lateralOffsetBeforeYards: number;
+  lateralOffsetAfterYards: number;
   remainingDistanceBeforeYards: number;
   remainingDistanceAfterYards: number;
-
   lieAfter: LieStatus;
   playableStateAfter: PlayableState;
-
   penalties: number;
+  warnings: string[];
   note?: string;
   createdAt: string;
 };
 
 export type BallState = {
   ballNumber: BallNumber;
+  avatar: BallAvatar;
   startingDistanceYards: number;
+  mapPosition: BallMapPosition;
   remainingDistanceYards: number;
   lie: LieStatus;
   playableState: PlayableState;
@@ -170,25 +251,43 @@ export type PlayerHoleState = {
 
 export type PlayerRoundState = {
   playerId: string;
-
-  // Null means unlimited/not tracked for that mode.
   dropsRemaining: number | null;
-
   totalStrokesHit: number;
   totalPenalties: number;
 };
 
-export type RoundSettings = {
-  gameMode: GameModeId;
-  ballsPerPlayer: BallsPerPlayer;
-  dropPenaltyStrokes: number;
+// =========================================================
+// BASIC SCORE MODE TYPES
+// =========================================================
 
-  // 3-Ball special rule:
-  // If player starts with only 1 ball, they get 5 drops.
-  singleBallStartingDrops: number;
+export type BasicHoleScore = {
+  holeNumber: number;
+  score: number;
+  completed: boolean;
+};
 
-  // Allows dropping near another player's playable ball.
-  allowDropNearOtherPlayersBall: boolean;
+export type BasicPlayerScoreState = {
+  playerId: string;
+  scoresByHole: Record<number, BasicHoleScore>;
+};
+
+export type ScoreLabel =
+  | "Eagle or better"
+  | "Birdie"
+  | "Par"
+  | "Bogey"
+  | "Double Bogey"
+  | "Triple+";
+
+// =========================================================
+// ROUND TYPES
+// =========================================================
+
+export type RoundNotice = {
+  id: string;
+  type: "warning" | "info";
+  message: string;
+  createdAt: string;
 };
 
 export type RoundState = {
@@ -198,40 +297,43 @@ export type RoundState = {
   players: Player[];
   settings: RoundSettings;
   currentHoleNumber: number;
+  basicScores: Record<string, BasicPlayerScoreState>;
   playerRoundStates: Record<string, PlayerRoundState>;
   holeStates: Record<number, Record<string, PlayerHoleState>>;
+  notices: RoundNotice[];
   startedAt: string;
   updatedAt: string;
 };
 
-export type RecordShotInput = {
+// =========================================================
+// ENGINE INPUT TYPES
+// =========================================================
+
+export type ApplyShotOutcomeInput = {
   playerId: string;
   ballNumber: BallNumber;
+  outcomeType: ShotOutcomeType;
   clubId?: string;
-  distanceYards: number;
-  lieAfter: LieStatus;
-  playableStateAfter?: PlayableState;
-  penalties?: number;
+  referencePlayerId?: string;
+  referenceBallNumber?: BallNumber;
   note?: string;
 };
 
-export type MarkBallUnplayableInput = {
+export type BasicScoreAdjustmentInput = {
   playerId: string;
-  ballNumber: BallNumber;
-  note?: string;
-};
-
-export type DropBallInput = {
-  playerId: string;
-  ballNumber: BallNumber;
-  referencePlayerId: string;
-  referenceBallNumber: BallNumber;
-  lieAfter?: LieStatus;
-  note?: string;
+  holeNumber: number;
+  delta: number;
 };
 
 export type ClubRecommendation = {
   club: Club;
   distanceGapYards: number;
+  confidenceScore: number;
   reason: string;
+};
+
+export type ValidationResult = {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
 };
